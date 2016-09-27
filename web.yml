@@ -71,7 +71,7 @@
 
     - name: updates service_dir
       become: yes
-      command: /usr/local/bin/composer.phar update chdir={{ service_dir }}
+      command: /usr/local/bin/composer.var update chdir={{ service_dir }}
 
     - name: creates service_directory dir 
       become: yes
