@@ -6,7 +6,7 @@ variable "vpc_id" {
 
 #Decalres var "password" 
 variable "password" {
-  description = "password for usage of the RDS instance" 
+  description = "password for the RDS instance" 
 }
 
 #Sets provider to "aws" and region to "us-west-2"
@@ -14,9 +14,8 @@ provider "aws" {
   region = "us-west-2"
 }
 
-#Sets the VPC to 172.31.0.0/16
 resource "aws_vpc" "main" {
-  cidr_block = "172.31.0.0/16"
+   cidr_block = "172.31.0.0/16"
 }
 
 #Creates a VPC Internet Gateway
@@ -28,14 +27,14 @@ resource "aws_internet_gateway" "gw" {
   }
 }
 
-#Creates a NAT gateway with subnet_id of "aws_subnet.public_subnet_a"
+#Creates a NAT gateway w/ subnet_id : "aws_subnet.public_subnet_a"
 resource "aws_nat_gateway" "gw" {
   allocation_id = "${aws_eip.nat.id}"
   subnet_id = "${aws_subnet.public_subnet_a.id}"
   depends_on = ["aws_internet_gateway.gw"]
 }
 
-#Creates an Elastic IP to be attached to the NAT Gateway
+#Creates an Elastic IP to be attached to the NAT GW
 resource "aws_eip" "nat" {
   vpc = true
 }
@@ -49,7 +48,7 @@ resource "aws_eip" "bastion" {
 #Creates a public subnet
 resource "aws_subnet" "public_subnet_a" {
   vpc_id = "${var.vpc_id}"
-  cidr_block = "172.31.20.0/24"
+  cidr_block = "172.31.12.0/24"
   availability_zone = "us-west-2a"
   map_public_ip_on_launch = true
   depends_on = ["aws_internet_gateway.gw"]
@@ -62,7 +61,7 @@ resource "aws_subnet" "public_subnet_a" {
 #Creates a public subnet
 resource "aws_subnet" "public_subnet_b" {
   vpc_id = "${var.vpc_id}"
-  cidr_block = "172.31.21.0/24"
+  cidr_block = "172.31.13.0/24"
   availability_zone = "us-west-2b"
   map_public_ip_on_launch = true
   depends_on = ["aws_internet_gateway.gw"]
@@ -75,7 +74,7 @@ resource "aws_subnet" "public_subnet_b" {
 #Creates a public subnet
 resource "aws_subnet" "public_subnet_c" {
   vpc_id = "${var.vpc_id}"
-  cidr_block = "172.31.22.0/24"
+  cidr_block = "172.31.14.0/24"
   availability_zone = "us-west-2c"
   map_public_ip_on_launch = true
   depends_on = ["aws_internet_gateway.gw"]
@@ -98,25 +97,23 @@ resource "aws_route_table" "public_routing_table" {
   }
 }
 
-#assosciates public_subnet_a to aws_route_table.public_routing_table
+#assosciates public_subnet_a/b/c to aws_route_table.public_routing_table
 resource "aws_route_table_association" "public_subnet_a_rt_assoc" {
   subnet_id = "${aws_subnet.public_subnet_a.id}"
   route_table_id = "${aws_route_table.public_routing_table.id}"
 }
 
-#assosciates public_subnet_b to aws_route_table.public_routing_table
 resource "aws_route_table_association" "public_subnet_b_rt_assoc" {
   subnet_id = "${aws_subnet.public_subnet_b.id}"
   route_table_id = "${aws_route_table.public_routing_table.id}"
 }
 
-#assosciates public_subnet_c to aws_route_table.public_routing_table
 resource "aws_route_table_association" "public_subnet_c_rt_assoc" {
   subnet_id = "${aws_subnet.public_subnet_c.id}"
   route_table_id = "${aws_route_table.public_routing_table.id}"
 }
 
-#Creates a private subnet
+#Creates a private subnets a-c
 resource "aws_subnet" "private_subnet_a" {
   vpc_id = "${var.vpc_id}"
   cidr_block = "172.31.0.0/22"
@@ -127,7 +124,6 @@ resource "aws_subnet" "private_subnet_a" {
   }
 }
 
-#Creates a private subnet
 resource "aws_subnet" "private_subnet_b" {
   vpc_id = "${var.vpc_id}"
   cidr_block = "172.31.4.0/22"
@@ -139,7 +135,6 @@ resource "aws_subnet" "private_subnet_b" {
   }
 }
 
-#Creates a private subnet
 resource "aws_subnet" "private_subnet_c" {
   vpc_id = "${var.vpc_id}"
   cidr_block = "172.31.8.0/22"
@@ -164,19 +159,17 @@ resource "aws_route_table" "private_routing_table" {
   }
 }
 
-#assosciates private_subnet_a to aws_route_table.private_routing_table
+#assosciates private_subnet_a/b/c to aws_route_table.private_routing_table
 resource "aws_route_table_association" "private_subnet_a_rt_assoc" {
   subnet_id = "${aws_subnet.private_subnet_a.id}"
   route_table_id = "${aws_route_table.private_routing_table.id}"
 }
 
-#assosciates private_subnet_b to aws_route_table.private_routing_table
 resource "aws_route_table_association" "private_subnet_b_rt_assoc" {
   subnet_id = "${aws_subnet.private_subnet_b.id}"
   route_table_id = "${aws_route_table.private_routing_table.id}"
 }
 
-#assosciates private_subnet_c to aws_route_table.private_routing_table
 resource "aws_route_table_association" "private_subnet_c_rt_assoc" {
   subnet_id = "${aws_subnet.private_subnet_c.id}"
   route_table_id = "${aws_route_table.private_routing_table.id}"
@@ -293,6 +286,8 @@ resource "aws_elb" "web" {
   instances = ["${aws_instance.webserverb.id}", "${aws_instance.webserverc.id}"] 
   connection_draining = true
   connection_draining_timeout = 60
+  cross_zone_load_balancing = true
+  idle_time = 60 
   
   tags {
     Name = "public-elb"
@@ -343,7 +338,7 @@ resource "aws_instance" "bastion" {
     source = "/Users/alfredogarcia/cit-360/terraform/cit360.pem"
     destination = "/home/ec2-user/.ssh/cit360.pem"
 
-#Makes the connection to the EC2 Instance via ssh and gives it the cit360 key
+#connects to the EC2 Instance via ssh and gives it the key
      connection {
       type = "ssh"
       user = "ec2-user"
@@ -357,7 +352,7 @@ resource "aws_instance" "bastion" {
     }
 }
 
-#Creates a single t2.micro instance in private_subnet_c with keypair cit360
+#Creates a t2.micro instance in private_subnet_c with keypair cit360
 resource "aws_instance" "webserverb" {
   ami = "ami-5ec1673e"
   instance_type = "t2.micro"
@@ -371,7 +366,7 @@ resource "aws_instance" "webserverb" {
   }
 }
 
-#Creates a single t2.micro instance in private_subnet_c with keypair cit360
+#Creates a t2.micro instance in private_subnet_c with keypair cit360
 resource "aws_instance" "webserverc" {
   ami = "ami-5ec1673e"
   instance_type = "t2.micro"
@@ -385,7 +380,7 @@ resource "aws_instance" "webserverc" {
   }
 }
 
-#Creates a single DB instance as an RDS with mariadb as a type
+#Creates a DB instance as an RDS with mariadb
 resource "aws_db_instance" "rds" {
   identifier = "rds"
   allocated_storage = 5

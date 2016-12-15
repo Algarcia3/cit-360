@@ -1,29 +1,26 @@
 ---
 - hosts: db
-  vars:
-    db_password: password
+
+  vars_files:
+   - secret.yml
   tasks:
-    - name: Copies MariaDb.repo 
+    - name: inlclude secret.yml
+      include_vars: secret.yml
+
+    - name: Copying MariaDB repos
+      become: yes
       copy: src=db/MariaDB.repo dest=/etc/yum.repos.d/MariaDB.repo mode=0644
 
-    - name: download MariaDB-server,-client 
+    - name:  Installing//Updateing MariaDB/ CLient
       become: yes
-      yum: name=MariaDB-server,MariaDB-client update_cache=yes state=present
+      yum: name=MariaDB-client update_cache=yes state=present
 
-    - name: starts service
+    - name: Extracting db.tgz to ~/
       become: yes
-      service: name=mariadb state=started enabled=yes
+      unarchive: src=db/db.tgz dest=~/ mode=0777
 
-    - name: templates mariadb_answers.txt
-      template: src=db/mariadb_answers.txt dest=/tmp/mariadb_answers.txt mode=0644
 
-    - name: moves mariadb_answers.txt to mysql_secure_installation
+    - name: run script
       become: yes
-      shell: /usr/bin/mysql_secure_installation </tmp/mariadb_answers.txt
-
-    - name: unpacks db.tgz
-      unarchive: src=db/db.tgz dest=~/
-
-    - name: makes db, sets password 
-      command: ./make_databases.sh {{ db_password }} localhost chdir=~/db
+      command: ./make_databases.sh {{ db_password }} rds.cpeg32lappd9.us-west-2.rds.amazonaws.com chdir=~/db
       ignore_errors: True

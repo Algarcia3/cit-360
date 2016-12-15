@@ -1,37 +1,43 @@
 ---
 - hosts: web
   vars:
-    db_password: password
     server_name: curriculum
     service_name: curriculum
     service_version: 1.0
-    app_key: QujjaJs3fxwtnTl7FiqhEEn1ACkf7YZW
     app_env: test
-    db_host: localhost
+    db_host: rds.cpeg32lappd9.us-west-2.rds.amazonaws.com
     db_database: curriculum
     db_username: curriculum
     db_port: 3306
     service_dir: /usr/share/nginx/{{ service_name }}
   tasks:
-    - name: Finds selinux, looks up "^Selinix", replaces it with "SELINUX=permissive"
-      become: yes
-      lineinfile: dest=/etc/sysconfig/selinux regexp="^SELINUX=" line="SELINUX=permissive"
-
-    - name: modify the mode SELinux is running in
-      become: yes
-      command: setenforce 0
+    - name: include secret
+      include_vars: secret.yml
 
     - name: downloads epel-release
+      become: yes
       yum: name=epel-release update_cache=yes state=present
 
-    - name: downloads [ nginx,php,php-fpm,php-ldap,php-mbstring,php-mcrypt,php-mysql,php-phpunit-PHPUnit ]
+    - name: install php 5.6 & httpd24
       become: yes
-      yum: name=nginx,php,php-fpm,php-ldap,php-mbstring,php-mcrypt,php-mysql,php-phpunit-PHPUnit update_cache=yes state=present
+      shell: yes | yum install php54 php54-fpm php54-ldap php54-mbstring php54-mcrypt php54-pdo php54-mysqlnd
+
+    - name: d.l nginx
+      become: yes
+      yum: nginx update_cache=yes state=present
       register: nginx_install
 
     - name: downloads from getcomposer.org, downloads composer
       become: yes
-      shell: uri -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+      get_url:
+        url: https://getcomposer.org/installer
+        dest: /usr/local/bin/composer
+        mode: 0777
+
+    - name: Installing composer
+      become: yes
+      shell: php /usr/local/bin/installer --install-dir=/usr/local/bin --filename=composer
+
 
     - name: copies nginx, puts it in ect
       become: yes
@@ -43,25 +49,26 @@
       template: src=web/vhost.conf.j2 dest=/etc/nginx/conf.d/{{ service_name }}.conf mode=0644
       register: vhost_conf
 
-    - name: templates php.ini to vm 
+    - name: templates php.ini to vm
       template: src=web/php.ini.j2 dest=/etc/php.ini mode=0644
       register: php_conf
 
-    - name: copies pho-fpm-web.conf to vm 
+    - name: copies php-fpm-web.conf to vm
       become: yes
       copy: src=web/php-fpm-web.conf dest=/etc/php-fpm.d/www.conf mode=0644
       register: php_fpm_conf
 
-    - name: restarts service nginx 
+    - name: starts service nginx
       become: yes
       service: name=nginx state=restarted enabled=yes
       when: nginx_install|changed or nginx_conf|changed or vhost_conf|changed
 
-    - name: restarts service php=fpm
+    - name: restarts FastCGI service php=fpm
+      become: yes
       service: name=php-fpm state=restarted enabled=yes
       when: nginx_install|changed or php_conf|changed or php_fpm_conf|changed
 
-    - name: 
+    - name: sets service_dir as a dir
       become: yes
       file: path="{{ service_dir }}" state=directory
 
@@ -69,24 +76,18 @@
       become: yes
       unarchive: src=web/{{ service_name }}.tgz dest="{{ service_dir }}" mode=0755
 
-    - name: updates service_dir
+    - name: updates composer dir
       become: yes
-      command: /usr/local/bin/composer.var update chdir={{ service_dir }}
+      command: /usr/local/bin/composer update chdir={{ service_dir }}
 
-    - name: creates service_directory dir 
+    - name: changes storage pemission
       become: yes
-      shell: chdir="{{ service_dir }}" mode=0777
-
-    - name: creates nginx as group
-      group: name=nginx state=present
+      file: path={{ service_dir }}/storage mode=0777
 
     - name: creates nginx as a user
-      user: name=nginx state=present
-
-    - name: creates nginx dir
-      shell: chdir="{{ service_dir }}" state=directory group=nginx owner=nginx
-
+      become: yes
+      file: path={{ service_dir }} recurse=yes group=nginx owner=nginx
+     
     - name: templates env.j2 to service_dir
       become: yes
       template: src=web/env.j2 dest="{{ service_dir }}/.env" mode=0644 owner=nginx
-
